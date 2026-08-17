@@ -837,6 +837,7 @@ pub fn navigate(self: *Frame, request_url: [:0]const u8, opts: NavigateOpts) !vo
         .throttle = self.parent == null,
         .cookie_jar = &session.cookie_jar,
         .cookie_origin = opts.initiator_url orelse self.url,
+        .origin = self.origin,
         .resource_type = .document,
         .notification = self._session.notification,
         .header_callback = frameHeaderDoneCallback,
@@ -2342,6 +2343,7 @@ pub fn loadExternalStylesheet(self: *Frame, link: *Element.Html.Link, href: []co
         .loader_id = self._loader_id,
         .cookie_jar = &session.cookie_jar,
         .cookie_origin = self.url,
+        .origin = self.origin,
         .resource_type = .stylesheet,
         .notification = session.notification,
         .shutdown_callback = HttpClient.noopShutdown, // syncRequest installs its own
