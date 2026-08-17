@@ -192,6 +192,7 @@ cache: *Cache,
 // Cached config decisions, resolved once at init.
 serve_mode: bool,
 obey_robots: bool,
+obey_cors: bool,
 
 // Applied to every transfer at configureConn, so a CDP change takes effect
 // on the next request, not on in-flight ones.
@@ -243,6 +244,7 @@ pub fn init(self: *Client, app: *lp.App, cdp: ?*CDP) !void {
         .serve_mode = config.mode == .serve,
         .obey_robots = config.obeyRobots(),
         .http_version = config.httpVersion(),
+        .obey_cors = config.obeyCors(),
         .robots = .{
             .network = network,
             .single_flight = .init(allocator),
@@ -979,7 +981,7 @@ fn pipeline(self: *Client, transfer: *Transfer, from: SubmitFrom) !void {
             if (try self.cacheLookup(transfer)) {
                 return;
             }
-            if (!transfer.req.internal) {
+            if (self.obey_cors and !transfer.req.internal) {
                 switch (try self.cors.check(transfer)) {
                     .allowed => {},
                     .blocked => return transfer.failAsync(error.CorsBlocked),
