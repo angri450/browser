@@ -39,6 +39,7 @@ pub const Scope = enum {
     telemetry,
     unknown_prop,
     websocket,
+    cors,
 };
 
 pub const num_scopes = @typeInfo(Scope).@"enum".fields.len;
