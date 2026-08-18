@@ -610,8 +610,8 @@ pub fn newRequest(self: *Client, req: Request, owner: ?*Owner) anyerror!*Transfe
         owned.url = try arena.dupeZ(u8, req.url);
         owned.cookie_origin = try arena.dupeZ(u8, req.cookie_origin);
         owned.origin = if (req.origin) |o| try arena.dupe(u8, o) else null;
-        if (req.credentials) |c| {
-            owned.credentials = try arena.dupeZ(u8, c);
+        if (req.basic_auth_credentials) |c| {
+            owned.basic_auth_credentials = try arena.dupeZ(u8, c);
         }
 
         // The body can be larger, so callers can signal, via the
@@ -1779,6 +1779,15 @@ pub const Request = struct {
     // ten segments, versus a TCP handshake plus a TLS one.
     const HEADERS_ONLY_DRAIN_MAX: usize = 16 * 1024;
 
+    pub const CredentialsMode = enum {
+        // Never send credentials, even same-origin.
+        omit,
+        // Send credentials only for same-origin requests.
+        same_origin,
+        // Always send credentials, including cross-origin.
+        include,
+    };
+
     frame_id: u32,
     loader_id: u32,
     method: Method,
@@ -1790,7 +1799,8 @@ pub const Request = struct {
     resource_type: ResourceType,
     redirect: RedirectMode = .follow,
     referrer_policy: ?referrer.Policy = null,
-    credentials: ?[:0]const u8 = null,
+    basic_auth_credentials: ?[:0]const u8 = null,
+    credentials_mode: CredentialsMode = .same_origin,
     notification: *Notification,
     timeout_ms: u32 = 0,
     skip_cache: bool = false,
@@ -2800,7 +2810,7 @@ pub const Transfer = struct {
         }
 
         // add credentials
-        if (req.credentials) |creds| {
+        if (req.basic_auth_credentials) |creds| {
             if (self._auth_challenge != null and self._auth_challenge.?.source == .proxy) {
                 try conn.setProxyCredentials(creds);
             } else {
@@ -2976,7 +2986,7 @@ pub const Transfer = struct {
     }
 
     pub fn updateCredentials(self: *Transfer, userpwd: [:0]const u8) void {
-        self.req.credentials = userpwd;
+        self.req.basic_auth_credentials = userpwd;
     }
 
     pub const RequestHeader = struct {
