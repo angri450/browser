@@ -249,10 +249,7 @@ pub fn init(self: *Client, app: *lp.App, cdp: ?*CDP) !void {
             .network = network,
             .single_flight = .init(allocator),
         },
-        .cors = .{
-            .network = network,
-            .single_flight = .init(allocator),
-        },
+        .cors = .{ .single_flight = .init(allocator) },
         .url_blocklist = url_blocklist,
         .arena_pool = &app.arena_pool,
     };
