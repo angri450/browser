@@ -19,69 +19,87 @@
 const std = @import("std");
 const lp = @import("lightpanda");
 
-const WS = @import("../network/WS.zig");
 const Inbox = @import("../Inbox.zig");
-
-const CDP = @import("cdp/CDP.zig");
-const Server = @import("Server.zig");
-const BiDi = @import("bidi/BiDi.zig");
-const Connection = @import("Connection.zig");
 const Browser = @import("../browser/Browser.zig");
 const Session = @import("../browser/Session.zig");
 
+const WS = @import("WS.zig");
+const Link = @import("Link.zig");
+
+const CDP = @import("cdp/CDP.zig");
+const BiDi = @import("bidi/BiDi.zig");
+
 const log = lp.log;
 
-// Parts of the driver are owned by the server run loop, parts are owned by
+// Parts of the driver are owned by the server loop, parts are owned by
 // the worker thread. The run loop reads messages and pushes to the inbox,
 // the worker mostly just writes to the socket.
-//
-// What every protocol has - a connection, a browser, a link to the network
-// thread - lives here rather than behind `impl`, so the shared paths are plain
-// field access. Only what genuinely differs switches on `impl`.
 const Driver = @This();
 
-pub const Impl = union(enum) {
+// Doubles as the metrics label
+pub const Protocol = enum { cdp, bidi };
+
+pub const Impl = union(Protocol) {
     cdp: *CDP,
     bidi: *BiDi,
 };
 
 impl: Impl,
-conn: *Connection,
+
+// every implementation has this
+conn: *Link,
 browser: *Browser,
-link: *Server.Link,
 
 // The protocol's log scope, so shared code still logs as .cdp / .bidi.
 scope: log.Scope,
 
-// Called from CDP.init / BiDi.init, where conn, link and browser are all
-// still undefined: we only take their addresses, which the impl's own
-// allocation already fixed.
+// Called from CDP.init / BiDi.init, where conn and browser are both still
+// undefined: we only take their addresses, which the impl's own allocation
+// already fixed.
 pub fn init(impl: Impl) Driver {
     return switch (impl) {
-        // The tag names line up with the log scopes of the same name.
         inline else => |d, tag| .{
             .impl = impl,
             .conn = &d.conn,
-            .link = &d.link,
             .browser = &d.browser,
-            .scope = @field(log.Scope, @tagName(tag)),
+            .scope = @field(log.Scope, @tagName(tag)), // The tag names line up with the log scopes of the same name.
         },
     };
 }
 
-// Server run loop. Received data, driver returns false to signal it should
-// disconnect.
-pub fn onData(self: *const Driver, data: []const u8) anyerror!bool {
-    return self.conn.feed(data);
+// server loop. The socket is readable, drain up to budget bytes
+pub fn onReadable(self: *const Driver, budget: usize) anyerror!bool {
+    const read = try self.conn.readAvailable(budget);
+    if (read.pushed) {
+        self.wakeup();
+    }
+    return read.keep;
 }
 
-// Server run loop. Called when it drops the link unsolicited (peer EOF, ...)
+// server loop. Called when it drops the link unsolicited (peer EOF, ...)
 pub fn onLinkDisconnect(self: *const Driver, err: ?anyerror) void {
-    self.browser.env.requestTerminate();
     const arena = self.browser.arena_pool.acquire(.tiny, "driver disconnect") catch |e| switch (e) {
         error.OutOfMemory => @panic("OOM"),
     };
     self.browser.http_client.inbox.push(arena, .{ .disconnect = err });
+    self.browser.env.requestTerminate();
+    self.wakeup();
+}
+
+// server loop. We used to send a nice WS close frame here but (a) it isn't strictly
+// required and (b) we'd have to protect against an interleaved write from
+// the worker thread.
+pub fn shutdown(self: *const Driver) void {
+    self.browser.env.terminate();
+    self.conn.shutdown();
+}
+
+// a server-processed call (onReadable, onLinkDisconnect) wants to signal the
+// worker that there's data in its inbox waiting to be processed.
+fn wakeup(self: *const Driver) void {
+    self.browser.http_client.handles.wakeup() catch |err| {
+        log.err(self.scope, "wakeup", .{ .err = err });
+    };
 }
 
 // Worker thread. We're processing messages from the inbox.
@@ -131,11 +149,24 @@ pub fn run(self: *const Driver) void {
     }
 }
 
+fn isDisconnect(msg: *Inbox.Message) bool {
+    return msg.payload == .disconnect;
+}
+
 // One iteration of the worker loop. Returns false to disconnect.
 fn tick(self: *const Driver) !bool {
     if (self.browser.env.terminatePending()) {
-        // terminatePending means someone decided this browser must die
-        // (e.g. the heap limit was reached).
+        // Our own requestTerminate from onLinkDisconnect: the peer is gone or
+        // sent garbage. Report it with its own close code, nothing to warn
+        // about.
+        if (self.browser.http_client.inbox.popIf(isDisconnect)) |msg| {
+            defer msg.deinit();
+            self.onDisconnect(msg.payload.disconnect);
+            return false;
+        }
+
+        // Anything else means someone decided this browser must die (e.g.
+        // shutdown, or the heap limit was reached).
         log.warn(self.scope, "closing connection", .{ .reason = "pending terminate" });
         // The worker thread is the sole writer of this socket, so sending
         // the close frame here can't interleave with another write.
@@ -188,15 +219,4 @@ fn pageWait(self: *const Driver) ?PageWait {
             return .{ .session = bidi.user_context.session, .frame_id = context.frame_id };
         },
     }
-}
-
-// signal handler thread
-pub fn shutdown(self: *const Driver) void {
-    if (self.conn.state == .live) {
-        self.browser.env.terminate();
-        // We use to send a nice WS close frame here but (a) it isn't
-        // strictly required and (b) we'd have to protect against an interleaved
-        // write from the worker thread.
-    }
-    self.conn.shutdown();
 }
