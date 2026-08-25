@@ -83,6 +83,7 @@ pub fn image(frame: *Frame, img: *Element.Html.Image, src: []const u8) !void {
         .loader_id = frame._loader_id,
         .cookie_jar = &session.cookie_jar,
         .cookie_origin = frame.url,
+        .origin = frame.origin,
         .resource_type = .image,
         .notification = session.notification,
         .headers_only = true,
