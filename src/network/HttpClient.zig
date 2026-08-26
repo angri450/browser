@@ -244,7 +244,7 @@ pub fn init(self: *Client, app: *lp.App, cdp: ?*CDP) !void {
         .serve_mode = config.mode == .serve,
         .obey_robots = config.obeyRobots(),
         .http_version = config.httpVersion(),
-        .obey_cors = config.obeyCors(),
+        .obey_cors = config.experimentalFeatures().cors,
         .robots = .{
             .network = network,
             .single_flight = .init(allocator),
