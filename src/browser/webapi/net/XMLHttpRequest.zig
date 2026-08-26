@@ -321,6 +321,7 @@ pub fn send(self: *XMLHttpRequest, body_: ?BodyInit, exec_: *const Execution) !v
         .body = self._request_body,
         .cookie_jar = if (cookie_support) &session.cookie_jar else null,
         .credentials_mode = if (self._with_credentials) .include else .same_origin,
+        .request_mode = .cors,
         .cookie_origin = exec.url.*,
         .origin = exec.origin(),
         .resource_type = .xhr,

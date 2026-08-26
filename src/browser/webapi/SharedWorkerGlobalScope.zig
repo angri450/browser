@@ -110,6 +110,8 @@ pub fn init(frame: *Frame, url: [:0]const u8, name: []const u8, worker_type: Wor
         .cookie_jar = &session.cookie_jar,
         .cookie_origin = owned_url,
         .origin = frame.origin,
+        .credentials_mode = .same_origin,
+        .request_mode = .same_origin,
         .notification = session.notification,
         .header_callback = httpHeaderCallback,
         .data_callback = httpDataCallback,

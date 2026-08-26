@@ -425,6 +425,8 @@ fn importScript(self: *WorkerGlobalScope, arena: Allocator, url: [:0]const u8) !
         .cookie_jar = &session.cookie_jar,
         .cookie_origin = self.url,
         .origin = self.origin,
+        .request_mode = .same_origin,
+        .credentials_mode = .same_origin,
         .resource_type = .script,
         .notification = session.notification,
         .shutdown_callback = HttpClient.noopShutdown, // syncRequest installs its own

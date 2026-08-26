@@ -185,6 +185,8 @@ fn connect(self: *EventSource) !void {
         .cookie_jar = if (cookie_support) &session.cookie_jar else null,
         .cookie_origin = exec.url.*,
         .origin = exec.origin(),
+        .request_mode = .cors,
+        .credentials_mode = if (self._with_credentials) .include else .same_origin,
         .resource_type = .eventsource,
         .streaming = true,
         .notification = session.notification,
