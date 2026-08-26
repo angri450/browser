@@ -1559,7 +1559,7 @@ test "cdp: syncRequest short-circuits after disconnect" {
         .method = .GET,
         .url = "http://127.0.0.1:9582/",
         .cookie_jar = null,
-        .cookie_origin = "",
+        .cookie_origin = .none,
         .resource_type = .fetch,
         .notification = undefined,
         .shutdown_callback = @import("../network/HttpClient.zig").noopShutdown,
