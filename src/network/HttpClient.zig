@@ -1814,7 +1814,7 @@ pub const Request = struct {
         try jar.forRequest(self.url, &aw.writer, .{
             .is_http = true,
             .origin_url = self.cookie_origin,
-            .is_navigation = self.resource_type == .document,
+            .is_navigation = self.resource_type == .document and self.method.isSafe(),
         });
         if (aw.written().len == 0) {
             return null;
