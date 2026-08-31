@@ -425,7 +425,7 @@ fn importScript(self: *WorkerGlobalScope, arena: Allocator, url: [:0]const u8) !
         .cookie_jar = &session.cookie_jar,
         .cookie_origin = self.url,
         .origin = self.origin,
-        .request_mode = .same_origin,
+        .request_mode = .no_cors,
         .credentials_mode = .same_origin,
         .resource_type = .script,
         .notification = session.notification,
